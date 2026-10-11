@@ -1,0 +1,862 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Vibebox.today</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #171322;
+      --panel: #241b35;
+      --panel-raised: #302344;
+      --text: #fff4fc;
+      --muted: #d0bcd4;
+      --pink: #ff8fcb;
+      --pink-bright: #ff5bb8;
+      --purple: #c6a1ff;
+      --green: #a7f3d0;
+      --border: #634d76;
+      --danger: #ff9aa9;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(ellipse at top left, #422044 0, transparent 42%),
+        radial-gradient(ellipse at bottom right, #202c48 0, transparent 45%),
+        var(--bg);
+      color: var(--text);
+      font: 16px/1.5 system-ui, sans-serif;
+    }
+
+    button, input, select { font: inherit; }
+
+    button {
+      border: 1px solid transparent;
+      border-radius: 9px;
+      padding: 9px 14px;
+      color: #26172d;
+      background: linear-gradient(135deg, var(--pink), var(--purple));
+      font-weight: 650;
+      cursor: pointer;
+      transition: filter .15s ease, transform .15s ease;
+    }
+
+    button:hover:not(:disabled) {
+      filter: brightness(1.12);
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      opacity: .45;
+      cursor: not-allowed;
+    }
+
+    button.secondary {
+      color: var(--text);
+      background: var(--panel-raised);
+      border-color: var(--border);
+    }
+
+    button.leave {
+      color: #351721;
+      background: var(--danger);
+    }
+
+    input, select {
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 10px 12px;
+      color: var(--text);
+      background: #191426;
+    }
+
+    input:focus, select:focus, button:focus-visible {
+      outline: 2px solid var(--green);
+      outline-offset: 2px;
+    }
+
+    a {
+      color: var(--green);
+      overflow-wrap: anywhere;
+    }
+
+    .page {
+      max-width: 1500px;
+      margin: 0 auto;
+      padding: 22px;
+    }
+
+    .site-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+
+    h1 {
+      margin-bottom: 0;
+      color: var(--pink);
+      letter-spacing: .04em;
+      text-shadow: 0 0 20px #ff5bb84d;
+    }
+
+    .tagline, .muted { color: var(--muted); }
+
+    .card {
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 15px;
+      background: linear-gradient(145deg, #281e38ed, #211a30ed);
+      box-shadow: 0 12px 38px #08061055;
+    }
+
+    .lobby {
+      max-width: 900px;
+      margin: 24px auto;
+    }
+
+    .lobby .row { margin: 14px 0; }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .row input { flex: 1 1 210px; }
+
+    .name-line {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .name-line input { width: min(270px, 100%); }
+
+    .room-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .room-toolbar h2 { margin: 0; }
+
+    .room-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .room-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 370px);
+      align-items: start;
+      gap: 16px;
+    }
+
+    .video-card { min-width: 0; }
+
+    #player {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      border-radius: 10px;
+      background: #09070e;
+    }
+
+    #player iframe {
+      width: 100%;
+      height: 100%;
+    }
+
+    .playback-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .sidebar {
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    .sidebar .card { min-width: 0; }
+    .sidebar h3 { margin-bottom: 10px; }
+
+    #youtubeUrl {
+      width: 100%;
+      min-height: 48px;
+      font-size: 17px;
+    }
+
+    .queue-submit {
+      display: grid;
+      gap: 8px;
+    }
+
+    .queue-list {
+      max-height: 50vh;
+      overflow: auto;
+      padding-left: 24px;
+      margin: 0;
+    }
+
+    .queue-list li {
+      padding: 8px 4px;
+      overflow-wrap: anywhere;
+      border-bottom: 1px solid #634d764d;
+    }
+
+    .queue-list li:last-child { border-bottom: 0; }
+
+    .queue-list li button {
+      margin: 6px 0 0 5px;
+      padding: 5px 9px;
+      font-size: 14px;
+    }
+
+    .people-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .user {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #634d764d;
+    }
+
+    .user-controls {
+      display: flex;
+      gap: 6px;
+    }
+
+    .user-controls button {
+      padding: 6px 9px;
+      font-size: 14px;
+    }
+
+    #error {
+      min-height: 1.5em;
+      color: var(--green);
+    }
+
+    .hidden { display: none !important; }
+    code { color: var(--green); overflow-wrap: anywhere; }
+
+    /* Theater mode: video fills the available height, with the sidebar on the right. */
+    body.theater {
+      overflow: hidden;
+    }
+
+    body.theater .page {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: none;
+      height: 100vh;
+      height: 100dvh;
+      margin: 0;
+      padding: 0;
+    }
+
+    body.theater .site-header,
+    body.theater #lobby,
+    body.theater #roomView > .name-line,
+    body.theater #error {
+      display: none;
+    }
+
+    body.theater #roomView {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    body.theater .room-toolbar {
+      flex: 0 0 auto;
+      margin: 0;
+      padding: 8px 14px;
+      background: #171322;
+    }
+
+    body.theater .room-layout {
+      display: grid;
+      flex: 1;
+      min-height: 0;
+      height: auto;
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+      align-items: stretch;
+      gap: 0;
+    }
+
+    body.theater .video-card {
+      display: flex;
+      height: 100%;
+      min-height: 0;
+      flex-direction: column;
+      padding: 8px;
+      border: 0;
+      border-radius: 0;
+    }
+
+    body.theater #player {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      min-height: 0;
+      aspect-ratio: auto;
+    }
+
+    body.theater #player iframe {
+      position: absolute;
+      inset: 0;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    body.theater .playback-controls {
+      flex: 0 0 auto;
+    }
+
+    body.theater .sidebar {
+      min-height: 0;
+      overflow-y: auto;
+      padding: 8px;
+      border-left: 1px solid var(--border);
+      background: #171322;
+    }
+
+    body.theater .queue-list { max-height: none; }
+
+    @media (max-width: 850px) {
+      .page { padding: 14px; }
+      .room-layout { grid-template-columns: 1fr; }
+      .sidebar { grid-template-columns: 1fr; }
+      .queue-list { max-height: 35vh; }
+    }
+
+    @media (max-width: 700px) {
+      body.theater {
+        overflow: auto;
+      }
+
+      body.theater .page {
+        height: auto;
+        min-height: 100vh;
+        min-height: 100dvh;
+      }
+
+      body.theater #roomView {
+        flex: none;
+        min-height: 100vh;
+        min-height: 100dvh;
+      }
+
+      body.theater .room-layout {
+        flex: none;
+        height: auto;
+        grid-template-columns: 1fr;
+      }
+
+      body.theater .video-card {
+        height: auto;
+      }
+
+      body.theater #player {
+        flex: none;
+        aspect-ratio: 16 / 9;
+      }
+
+      body.theater #player iframe {
+        position: static;
+        aspect-ratio: 16 / 9;
+      }
+
+      body.theater .sidebar {
+        border-left: 0;
+        border-top: 1px solid var(--border);
+      }
+    }
+
+    @media (max-width: 520px) {
+      .site-header,
+      .room-toolbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .page { padding: 10px; }
+      .card { padding: 13px; }
+
+      .name-line {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .name-line input { width: 100%; }
+      .room-actions { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="site-header">
+      <div>
+        <h1>Vibebox.today</h1>
+        <p class="tagline muted">Shared YouTube rooms, with a vaporwave glow.</p>
+      </div>
+    </header>
+
+    <section id="lobby" class="card lobby">
+      <h2>Create or join a room</h2>
+
+      <label class="name-line">
+        Your name
+        <input id="name" maxlength="30" placeholder="Guest">
+      </label>
+
+      <div class="row">
+        <input id="roomName" maxlength="50" placeholder="New room name">
+        <input id="createPassword" type="password" maxlength="128" placeholder="Optional room password">
+        <select id="defaultRole" aria-label="Default role for new users">
+          <option value="regular">New users: regular</option>
+          <option value="admin">New users: admin</option>
+        </select>
+        <button id="create">Create room</button>
+      </div>
+
+      <div class="row">
+        <input id="roomId" placeholder="Room name or invite link">
+        <input id="joinPassword" type="password" maxlength="128" placeholder="Room password (if needed)">
+        <button id="join">Join room</button>
+      </div>
+
+      <p id="lobbyError" role="status" class="muted"></p>
+    </section>
+
+    <main id="roomView" class="hidden">
+      <div class="room-toolbar">
+        <div>
+          <h2 id="title"></h2>
+          <span class="muted">Invite: <code id="invite"></code></span>
+          <button id="copy" class="secondary">Copy link</button>
+        </div>
+
+        <div class="room-actions">
+          <button id="theater" class="secondary" aria-pressed="false">Theater mode</button>
+          <button id="leave" class="leave">Leave room</button>
+        </div>
+      </div>
+
+      <div class="name-line">
+        <label for="rename">Your name:</label>
+        <input id="rename" maxlength="30">
+        <button id="saveName" class="secondary">Save name</button>
+      </div>
+
+      <div class="room-layout">
+        <section class="card video-card" aria-label="Video playback">
+          <div id="player"></div>
+          <div class="playback-controls">
+            <button id="play">Play</button>
+            <button id="pause">Pause</button>
+            <button id="skip">Skip</button>
+          </div>
+        </section>
+
+        <aside class="sidebar">
+          <section class="card">
+            <h3>Add to queue</h3>
+            <div class="queue-submit">
+              <input id="youtubeUrl" maxlength="2048" placeholder="Paste a YouTube link">
+              <button id="add">Add video</button>
+            </div>
+          </section>
+
+          <section class="card">
+            <h3>Queue</h3>
+            <ol id="queue" class="queue-list"></ol>
+          </section>
+
+          <section class="card">
+            <h3>People in this room</h3>
+            <div id="users" class="people-list"></div>
+          </section>
+        </aside>
+      </div>
+
+      <p id="error" role="status"></p>
+    </main>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script>
+    const socket = io();
+    const $ = id => document.getElementById(id);
+
+    let userId = localStorage.jukeboxUserId;
+    if (!userId) {
+      userId = crypto.randomUUID();
+      localStorage.jukeboxUserId = userId;
+    }
+
+    $("name").value = localStorage.jukeboxName || "";
+
+    let room = null;
+    let player = null;
+    let playerReady = false;
+    let applyingRemote = false;
+    let loadedVideoId = null;
+    let lastPlaybackUpdatedAt = null;
+
+    function currentName() {
+      return ($("name").value || "").trim().slice(0, 30) || "Guest";
+    }
+
+    function showError(message) {
+      $("error").textContent = message || "";
+      $("lobbyError").textContent = message || "";
+    }
+
+    function setAdminControls() {
+      const admin = room?.users.find(user => user.id === userId)?.role === "admin";
+      ["play", "pause", "skip", "add"].forEach(id => {
+        $(id).disabled = !admin;
+      });
+      $("youtubeUrl").disabled = !admin;
+    }
+
+    function stopRoomVideo() {
+      if (playerReady && player) {
+        applyingRemote = true;
+        player.stopVideo();
+      }
+
+      loadedVideoId = null;
+      lastPlaybackUpdatedAt = null;
+    }
+
+    window.onYouTubeIframeAPIReady = () => {
+      player = new YT.Player("player", {
+        videoId: "",
+        playerVars: { playsinline: 1, origin: location.origin },
+        events: {
+          onReady: () => {
+            playerReady = true;
+            applyPlayback();
+          },
+          onStateChange: event => {
+            if (
+              !applyingRemote &&
+              event.data === YT.PlayerState.ENDED &&
+              room
+            ) {
+              socket.emit("playback:control", { action: "skip" });
+            }
+          }
+        }
+      });
+    };
+
+    function applyPlayback() {
+      if (!room || !playerReady) return;
+
+      const item = room.queue[room.currentIndex];
+      if (!item) return;
+
+      const playback = room.playback;
+      const position =
+        playback.position +
+        (playback.playing ? (Date.now() - playback.updatedAt) / 1000 : 0);
+
+      applyingRemote = true;
+
+      if (loadedVideoId !== item.id) {
+        loadedVideoId = item.id;
+        lastPlaybackUpdatedAt = playback.updatedAt;
+
+        if (playback.playing) {
+          player.loadVideoById({
+            videoId: item.id,
+            startSeconds: Math.max(0, position)
+          });
+        } else {
+          player.cueVideoById(item.id, Math.max(0, position));
+        }
+
+        setTimeout(() => { applyingRemote = false; }, 1200);
+        return;
+      }
+
+      if (lastPlaybackUpdatedAt === playback.updatedAt) {
+        applyingRemote = false;
+        return;
+      }
+
+      lastPlaybackUpdatedAt = playback.updatedAt;
+
+      if (playback.playing) {
+        const currentTime = player.getCurrentTime() || 0;
+        if (Math.abs(currentTime - position) > 2) {
+          player.seekTo(Math.max(0, position), true);
+        }
+        player.playVideo();
+      } else {
+        player.pauseVideo();
+        const currentTime = player.getCurrentTime() || 0;
+        if (Math.abs(currentTime - position) > 2) {
+          player.seekTo(Math.max(0, position), true);
+        }
+      }
+
+      setTimeout(() => { applyingRemote = false; }, 500);
+    }
+
+    function render() {
+      if (!room) return;
+
+      $("lobby").classList.add("hidden");
+      $("roomView").classList.remove("hidden");
+      $("title").textContent = room.name;
+      $("invite").textContent = `${location.origin}/${room.slug}`;
+      $("rename").value = $("name").value;
+      setAdminControls();
+
+      const queue = $("queue");
+      queue.replaceChildren();
+
+      room.queue.forEach((item, index) => {
+        const li = document.createElement("li");
+        li.textContent =
+          (index === room.currentIndex ? "▶ " : "") +
+          (item.title || `YouTube video (${item.id})`) +
+          " ";
+
+        const link = document.createElement("a");
+        link.href = item.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "Open video";
+        li.append(link);
+
+        if (room.users.find(user => user.id === userId)?.role === "admin") {
+          const remove = document.createElement("button");
+          remove.textContent = "Remove";
+          remove.onclick = () => socket.emit("queue:remove", index);
+          li.append(" ", remove);
+        }
+
+        queue.append(li);
+      });
+
+      const users = $("users");
+      users.replaceChildren();
+
+      room.users.forEach(user => {
+        const row = document.createElement("div");
+        row.className = "user";
+
+        const label = document.createElement("span");
+        label.textContent =
+          `${user.name} (${user.role})` +
+          (user.id === room.creatorId ? " · creator" : "");
+        row.append(label);
+
+        const me = room.users.find(candidate => candidate.id === userId);
+
+        if (
+          me?.role === "admin" &&
+          user.id !== userId &&
+          user.id !== room.creatorId
+        ) {
+          const controls = document.createElement("span");
+          controls.className = "user-controls";
+
+          if (user.role !== "admin") {
+            const promote = document.createElement("button");
+            promote.textContent = "Make admin";
+            promote.onclick = () => socket.emit("user:role", {
+              targetId: user.id,
+              role: "admin"
+            });
+            controls.append(promote);
+          } else if (me.id === room.creatorId) {
+            const demote = document.createElement("button");
+            demote.textContent = "Make regular";
+            demote.onclick = () => socket.emit("user:role", {
+              targetId: user.id,
+              role: "regular"
+            });
+            controls.append(demote);
+          }
+
+          const kick = document.createElement("button");
+          kick.textContent = "Kick";
+          kick.onclick = () => socket.emit("user:kick", user.id);
+          controls.append(kick);
+          row.append(controls);
+        }
+
+        users.append(row);
+      });
+
+      applyPlayback();
+    }
+
+    function entered(result) {
+      if (!result?.ok) {
+        showError(result?.error || "Could not enter room.");
+        return;
+      }
+
+      room = result.room;
+      localStorage.jukeboxName = currentName();
+      $("name").value = localStorage.jukeboxName;
+      showError("");
+      render();
+      history.replaceState(null, "", `/${room.slug}`);
+    }
+
+    $("create").onclick = () => {
+      const roomName = $("roomName").value.trim();
+
+      if (!/^[A-Za-z0-9][A-Za-z0-9 ._-]{0,49}$/.test(roomName)) {
+        showError("Room names can contain letters, numbers, spaces, periods, underscores, and hyphens; max 50 characters.");
+        return;
+      }
+
+      socket.emit("room:create", {
+        name: roomName,
+        password: $("createPassword").value,
+        defaultRole: $("defaultRole").value,
+        userId,
+        userName: currentName()
+      }, entered);
+    };
+
+    $("join").onclick = () => {
+      const raw = $("roomId").value.trim();
+      let roomId = raw;
+
+      try {
+        if (raw.startsWith("http")) {
+          roomId = new URL(raw).pathname.split("/").filter(Boolean).pop();
+        } else if (raw.includes("/")) {
+          roomId = raw.split("/").filter(Boolean).pop();
+        }
+      } catch {}
+
+      socket.emit("room:join", {
+        roomId,
+        password: $("joinPassword").value,
+        userId,
+        userName: currentName()
+      }, entered);
+    };
+
+    $("add").onclick = () =>
+      socket.emit("queue:add", $("youtubeUrl").value);
+
+    $("play").onclick = () =>
+      socket.emit("playback:control", {
+        action: "play",
+        position: playerReady ? player.getCurrentTime() : 0
+      });
+
+    $("pause").onclick = () =>
+      socket.emit("playback:control", {
+        action: "pause",
+        position: playerReady ? player.getCurrentTime() : 0
+      });
+
+    $("skip").onclick = () =>
+      socket.emit("playback:control", { action: "skip" });
+
+    $("saveName").onclick = () => {
+      const name = $("rename").value.trim().slice(0, 30) || "Guest";
+      $("name").value = name;
+      localStorage.jukeboxName = name;
+      if (room) socket.emit("user:name", name);
+    };
+
+    $("copy").onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(`${location.origin}/${room.slug}`);
+        showError("Invite link copied.");
+      } catch {
+        showError("Could not copy the link. You can copy it from the invite link above.");
+      }
+    };
+
+    $("theater").onclick = () => {
+      const enabled = document.body.classList.toggle("theater");
+      $("theater").textContent = enabled ? "Exit theater mode" : "Theater mode";
+      $("theater").setAttribute("aria-pressed", String(enabled));
+    };
+
+    $("leave").onclick = () => {
+      stopRoomVideo();
+      socket.emit("room:leave");
+      room = null;
+
+      $("roomView").classList.add("hidden");
+      $("lobby").classList.remove("hidden");
+      document.body.classList.remove("theater");
+      $("theater").textContent = "Theater mode";
+      $("theater").setAttribute("aria-pressed", "false");
+      history.replaceState(null, "", "/");
+      showError("");
+    };
+
+    socket.on("room:update", updated => {
+      if (room?.id === updated.id) {
+        room = updated;
+        render();
+      }
+    });
+
+    socket.on("app:error", showError);
+
+    socket.on("room:kicked", () => {
+      stopRoomVideo();
+      room = null;
+
+      $("roomView").classList.add("hidden");
+      $("lobby").classList.remove("hidden");
+      document.body.classList.remove("theater");
+      $("theater").textContent = "Theater mode";
+      $("theater").setAttribute("aria-pressed", "false");
+      history.replaceState(null, "", "/");
+      showError("You were removed from the room.");
+    });
+
+    const pathRoom = location.pathname.split("/").filter(Boolean).pop();
+    if (pathRoom) $("roomId").value = pathRoom;
+  </script>
+</body>
+</html>

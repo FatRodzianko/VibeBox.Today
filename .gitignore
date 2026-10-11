@@ -1,0 +1,15 @@
+node_modules/
+.env
+.env.*
+!.env.example
+
+rooms.json
+data/
+
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+.DS_Store
+Thumbs.db
+coverage/
