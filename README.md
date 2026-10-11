@@ -66,16 +66,6 @@ Room data is stored in the `vibebox-data` Docker volume. To remove the app **and
 docker compose down --volumes
 ```
 
-## GitHub
-
-Generate and commit `package-lock.json`:
-
-```sh
-npm install
-```
-
-Do not commit `.env`, `rooms.json`, or real credentials. The project `.gitignore` excludes them.
-
 ## Deployment notes
 
 The published port must be allowed through the server’s firewall and any router or hosting-provider firewall. For a public deployment, use HTTPS—typically by putting the app behind a reverse proxy that handles TLS. The Docker configuration limits the container’s privileges, but containers should not be treated as a complete security boundary from their host.
