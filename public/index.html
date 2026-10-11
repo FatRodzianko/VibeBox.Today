@@ -518,11 +518,26 @@
     const socket = io();
     const $ = id => document.getElementById(id);
 
-    let userId = localStorage.jukeboxUserId;
-    if (!userId) {
-      userId = crypto.randomUUID();
-      localStorage.jukeboxUserId = userId;
-    }
+    function createUserId() {
+	  if (crypto.randomUUID) return crypto.randomUUID();
+
+	  const bytes = new Uint8Array(16);
+	  crypto.getRandomValues(bytes);
+	  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+	  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+	  return [...bytes].map((byte, i) =>
+		[4, 6, 8, 10].includes(i)
+		  ? `-${byte.toString(16).padStart(2, "0")}`
+		  : byte.toString(16).padStart(2, "0")
+	  ).join("");
+	}
+
+	let userId = localStorage.jukeboxUserId;
+	if (!userId) {
+	  userId = createUserId();
+	  localStorage.jukeboxUserId = userId;
+	}
 
     $("name").value = localStorage.jukeboxName || "";
 
