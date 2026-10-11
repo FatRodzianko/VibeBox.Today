@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Vibebox.today</title>
   <style>
     :root {
@@ -401,6 +402,26 @@
         border-top: 1px solid var(--border);
       }
     }
+	.youtube-search-results {
+	  display: grid;
+	  gap: 8px;
+	  margin-top: 10px;
+	}
+
+	.youtube-search-result {
+	  width: 100%;
+	  color: var(--text);
+	  background: var(--panel-raised);
+	  border: 1px solid var(--border);
+	  text-align: left;
+	}
+
+	.youtube-search-result small {
+	  display: block;
+	  color: var(--muted);
+	  font-weight: 400;
+	  margin-top: 3px;
+	}
 
     @media (max-width: 520px) {
       .site-header,
@@ -430,31 +451,37 @@
       </div>
     </header>
 
-    <section id="lobby" class="card lobby">
-      <h2>Create or join a room</h2>
+    <section id="lobby" class="lobby">
+      <label for="name">Your name:</label>
+      <input id="name" maxlength="30" placeholder="Your name">
 
-      <label class="name-line">
-        Your name
-        <input id="name" maxlength="30" placeholder="Guest">
-      </label>
+      <div class="room-layout">
+        <section class="card">
+          <h3>Create a room</h3>
+          <div class="queue-submit">
+            <input id="roomName" maxlength="50" placeholder="New room name">
+            <input id="createPassword" type="password" maxlength="128"
+                   placeholder="Optional room password">
+            <select id="defaultRole" aria-label="Default role for new users">
+              <option value="regular">New users: regular</option>
+              <option value="admin">New users: admin</option>
+            </select>
+            <button id="create">Create room</button>
+          </div>
+        </section>
 
-      <div class="row">
-        <input id="roomName" maxlength="50" placeholder="New room name">
-        <input id="createPassword" type="password" maxlength="128" placeholder="Optional room password">
-        <select id="defaultRole" aria-label="Default role for new users">
-          <option value="regular">New users: regular</option>
-          <option value="admin">New users: admin</option>
-        </select>
-        <button id="create">Create room</button>
+        <section class="card">
+          <h3>Join a room</h3>
+          <div class="queue-submit">
+            <input id="roomId" placeholder="Room name or invite link">
+            <input id="joinPassword" type="password" maxlength="128"
+                   placeholder="Room password (if needed)">
+            <button id="join">Join room</button>
+          </div>
+        </section>
       </div>
 
-      <div class="row">
-        <input id="roomId" placeholder="Room name or invite link">
-        <input id="joinPassword" type="password" maxlength="128" placeholder="Room password (if needed)">
-        <button id="join">Join room</button>
-      </div>
-
-      <p id="lobbyError" role="status" class="muted"></p>
+      <p id="lobbyError" role="status"></p>
     </section>
 
     <main id="roomView" class="hidden">
@@ -488,6 +515,16 @@
         </section>
 
         <aside class="sidebar">
+		<section class="card" id="youtubeSearchCard">
+		  <h3>Search YouTube</h3>
+		  <div class="queue-submit">
+			<input id="youtubeSearchQuery" maxlength="100"
+				   placeholder="Search videos">
+			<button id="youtubeSearchButton">Search and add</button>
+			<p id="youtubeSearchStatus" class="muted" role="status"></p>
+			<div id="youtubeSearchResults" class="youtube-search-results"></div>
+		  </div>
+		</section>
           <section class="card">
             <h3>Add to queue</h3>
             <div class="queue-submit">
@@ -516,6 +553,11 @@
   <script src="https://www.youtube.com/iframe_api"></script>
   <script>
     const socket = io();
+
+    socket.on("connect_error", error => {
+      showError(`Connection failed: ${error.message}`);
+    });
+
     const $ = id => document.getElementById(id);
 
     function createUserId() {
@@ -563,6 +605,7 @@
         $(id).disabled = !admin;
       });
       $("youtubeUrl").disabled = !admin;
+	  $("youtubeSearchCard").classList.toggle("hidden", !admin);
     }
 
     function stopRoomVideo() {
@@ -834,6 +877,83 @@
       }, entered);
     };
 
+	function formatDuration(totalSeconds) {
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      return `${minutes}:${String(seconds).padStart(2, "0")}`;
+    }
+
+    $("youtubeSearchButton").onclick = () => {
+      const query = $("youtubeSearchQuery").value.trim();
+      const resultsElement = $("youtubeSearchResults");
+
+      resultsElement.replaceChildren();
+      $("youtubeSearchStatus").textContent = "Searching…";
+
+      socket.emit("youtube:search", { query }, result => {
+        resultsElement.replaceChildren();
+
+        if (!result?.ok) {
+          $("youtubeSearchStatus").textContent =
+            result?.error || "Search failed.";
+
+          if (result?.disabled) {
+            hideYouTubeSearch(result.resetAt);
+          }
+          return;
+        }
+
+        if (!result.results?.length) {
+          $("youtubeSearchStatus").textContent =
+            "No matching embeddable videos between 2 and 15 minutes were found.";
+          return;
+        }
+
+        $("youtubeSearchStatus").textContent =
+          "Choose a video to add to the queue:";
+
+        for (const video of result.results) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "youtube-search-result";
+
+          const title = document.createElement("span");
+          title.textContent = video.title;
+
+          const details = document.createElement("small");
+          details.textContent =
+            `${formatDuration(video.durationSeconds)} · ${video.channelTitle}`;
+
+          button.append(title, details);
+
+          button.onclick = () => {
+            button.disabled = true;
+            $("youtubeSearchStatus").textContent = `Adding: ${video.title}`;
+
+            socket.emit(
+              "queue:add",
+              `https://www.youtube.com/watch?v=${encodeURIComponent(video.id)}`
+            );
+
+            resultsElement.replaceChildren();
+          };
+
+          resultsElement.append(button);
+        }
+      });
+    };
+
+	function hideYouTubeSearch(resetAt) {
+	  $("youtubeSearchCard").classList.add("hidden");
+	  $("youtubeSearchStatus").textContent = resetAt
+		? `Search is disabled until ${new Date(resetAt).toLocaleString()}.`
+		: "YouTube search is disabled for today.";
+	}
+
+	socket.on("youtube:search-status", status => {
+	  if (!status.enabled) hideYouTubeSearch(status.resetAt);
+	});
+
     $("add").onclick = () =>
       socket.emit("queue:add", $("youtubeUrl").value);
 
@@ -911,7 +1031,25 @@
     });
 
     const pathRoom = location.pathname.split("/").filter(Boolean).pop();
-    if (pathRoom) $("roomId").value = pathRoom;
+
+    if (pathRoom) {
+      $("roomId").value = pathRoom;
+
+      const autoJoinFromLink = () => {
+        socket.emit("room:join", {
+          roomId: pathRoom,
+          password: "",
+          userId,
+          userName: currentName()
+        }, entered);
+      };
+
+      if (socket.connected) {
+        autoJoinFromLink();
+      } else {
+        socket.once("connect", autoJoinFromLink);
+      }
+    }
   </script>
 </body>
 </html>

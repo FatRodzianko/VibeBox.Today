@@ -11,9 +11,55 @@ const io = new Server(server, {
   maxHttpBufferSize: 1e5
 });
 
+io.engine.use((req, res, next) => {
+  if (authorizedRequest(req)) return next();
+
+  res.writeHead(401, {
+    "WWW-Authenticate": 'Basic realm="Vibebox", charset="UTF-8"'
+  });
+  res.end("Password required.");
+});
+
 const PORT = Number(process.env.PORT) || 3000;
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 const DATA_FILE = path.join(DATA_DIR, "rooms.json");
+const SEARCH_STATE_FILE = path.join(DATA_DIR, "search-state.json");
+
+
+const APP_PASSWORD = process.env.APP_PASSWORD || "";
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || "";
+
+function authorizedRequest(req) {
+  if (!APP_PASSWORD) return true;
+
+  const header = req.headers.authorization || "";
+  const [scheme, encoded] = header.split(" ");
+  if (scheme !== "Basic" || !encoded) return false;
+
+  let suppliedPassword;
+  try {
+    suppliedPassword = Buffer.from(encoded, "base64")
+      .toString("utf8")
+      .split(":")
+      .slice(1)
+      .join(":");
+  } catch {
+    return false;
+  }
+
+  const supplied = Buffer.from(suppliedPassword);
+  const expected = Buffer.from(APP_PASSWORD);
+
+  return supplied.length === expected.length &&
+    crypto.timingSafeEqual(supplied, expected);
+}
+
+function requireAppPassword(req, res, next) {
+  if (authorizedRequest(req)) return next();
+
+  res.set("WWW-Authenticate", 'Basic realm="Vibebox", charset="UTF-8"');
+  res.status(401).send("Password required.");
+}
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const DEFAULT_VIDEO = {
@@ -21,6 +67,16 @@ const DEFAULT_VIDEO = {
   title: "Bustin' — Neil Cicierega",
   url: "https://www.youtube.com/watch?v=0tdyU_gW6WE"
 };
+
+app.use(requireAppPassword);
+
+app.use((req, res, next) => {
+  res.setHeader(
+    "Referrer-Policy",
+    "strict-origin-when-cross-origin"
+  );
+  next();
+});
 
 app.use(express.static(path.join(__dirname, "public")));
 
@@ -41,7 +97,92 @@ function save() {
     mode: 0o600
   });
 }
+function nextPacificMidnight() {
+  const now = new Date();
 
+  // Find the next calendar date in America/Los_Angeles, then convert
+  // that date's midnight back to a UTC timestamp.
+  const pacificDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(now);
+
+  const [year, month, day] = pacificDate.split("-").map(Number);
+  const nextDate = new Date(Date.UTC(year, month - 1, day + 1));
+
+  // Start with a UTC guess, then adjust it to Pacific midnight.
+  let result = Date.UTC(
+    nextDate.getUTCFullYear(),
+    nextDate.getUTCMonth(),
+    nextDate.getUTCDate()
+  );
+
+  for (let i = 0; i < 3; i++) {
+    const pacificParts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Los_Angeles",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23"
+    }).formatToParts(new Date(result));
+
+    const values = Object.fromEntries(
+      pacificParts.map(part => [part.type, part.value])
+    );
+
+    const representedAsUtc = Date.UTC(
+      Number(values.year),
+      Number(values.month) - 1,
+      Number(values.day),
+      Number(values.hour),
+      Number(values.minute),
+      Number(values.second)
+    );
+
+    result += Date.UTC(
+      nextDate.getUTCFullYear(),
+      nextDate.getUTCMonth(),
+      nextDate.getUTCDate()
+    ) - representedAsUtc;
+  }
+
+  return result;
+}
+
+let searchDisabledUntil = 0;
+
+try {
+  const saved = JSON.parse(fs.readFileSync(SEARCH_STATE_FILE, "utf8"));
+  searchDisabledUntil = Number(saved.searchDisabledUntil) || 0;
+} catch {}
+
+function searchEnabled() {
+  if (Date.now() >= searchDisabledUntil) {
+    searchDisabledUntil = 0;
+    return true;
+  }
+  return false;
+}
+
+function setSearchDisabledUntilReset() {
+  searchDisabledUntil = nextPacificMidnight();
+
+  fs.writeFileSync(
+    SEARCH_STATE_FILE,
+    JSON.stringify({ searchDisabledUntil }),
+    { mode: 0o600 }
+  );
+
+  io.emit("youtube:search-status", {
+    enabled: false,
+    resetAt: searchDisabledUntil
+  });
+}
 function makeId() {
   return crypto.randomBytes(5).toString("hex");
 }
@@ -438,6 +579,200 @@ io.on("connection", socket => {
   socket.on("disconnect", () => {
     leaveSocketRoom(socket);
   });
+  socket.on("youtube:search", async (payload = {}, done) => {
+  if (typeof done !== "function") return;
+
+  const room = findRoom(socket);
+  if (!room || !isAdmin(room, socket.data.userId)) {
+    return done({ ok: false, error: "Only admins can search and add videos." });
+  }
+
+  if (!searchEnabled()) {
+    return done({
+      ok: false,
+      disabled: true,
+      resetAt: searchDisabledUntil,
+      error: "YouTube search is unavailable until the daily quota resets."
+    });
+  }
+
+  const apiKey = YOUTUBE_API_KEY;
+  const query = typeof payload.query === "string" ? payload.query.trim() : "";
+
+  if (!apiKey) {
+	  return done({ ok: false, error: "YouTube search is not configured on the server." });
+	}
+
+  if (query.length < 2 || query.length > 100) {
+    return done({ ok: false, error: "Search terms must be 2–100 characters." });
+  }
+
+  try {
+    const searchUrl = new URL("https://www.googleapis.com/youtube/v3/search");
+    searchUrl.search = new URLSearchParams({
+      key: apiKey,
+      part: "snippet",
+      type: "video",
+      videoEmbeddable: "true",
+      order: "viewCount",
+      maxResults: "10",
+      q: query
+    });
+
+    const searchResponse = await fetch(searchUrl);
+    const searchData = await searchResponse.json();
+
+    if (!searchResponse.ok) {
+      const reason = searchData?.error?.errors?.[0]?.reason;
+
+      if (reason === "quotaExceeded") {
+        setSearchDisabledUntilReset();
+        return done({
+          ok: false,
+          disabled: true,
+          resetAt: searchDisabledUntil,
+          error: "YouTube search quota was reached. Search is disabled for everyone until the daily reset."
+        });
+      }
+
+      if (reason === "keyInvalid" || searchResponse.status === 400) {
+        return done({
+          ok: false,
+          error: "That API key was rejected. Check that YouTube Data API v3 is enabled for its Google Cloud project."
+        });
+      }
+
+      return done({
+        ok: false,
+        error: "YouTube search failed. Check the API key and try again."
+      });
+    }
+
+        const ids = (searchData.items || [])
+      .map(item => item.id?.videoId)
+      .filter(Boolean);
+
+    if (!ids.length) {
+      return done({ ok: true, results: [] });
+    }
+
+    const detailsUrl = new URL("https://www.googleapis.com/youtube/v3/videos");
+    detailsUrl.search = new URLSearchParams({
+      key: apiKey,
+      part: "snippet,contentDetails,statistics,status",
+      id: ids.join(",")
+    });
+
+    const detailsResponse = await fetch(detailsUrl);
+    const detailsData = await detailsResponse.json();
+
+    if (!detailsResponse.ok) {
+      const reason = detailsData?.error?.errors?.[0]?.reason;
+
+      if (reason === "quotaExceeded") {
+        setSearchDisabledUntilReset();
+        return done({
+          ok: false,
+          disabled: true,
+          resetAt: searchDisabledUntil,
+          error: "YouTube search quota was reached. Search is disabled for everyone until the daily reset."
+        });
+      }
+
+      return done({ ok: false, error: "Could not retrieve video details." });
+    }
+
+    function durationSeconds(isoDuration) {
+      const match = isoDuration.match(
+        /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/
+      );
+      if (!match) return Infinity;
+
+      return (
+        Number(match[1] || 0) * 3600 +
+        Number(match[2] || 0) * 60 +
+        Number(match[3] || 0)
+      );
+    }
+
+    const results = (detailsData.items || [])
+      .map(video => ({
+        id: video.id,
+        title: video.snippet?.title || `YouTube video (${video.id})`,
+        channelTitle: video.snippet?.channelTitle || "",
+        durationSeconds: durationSeconds(video.contentDetails?.duration || ""),
+        embeddable: video.status?.embeddable === true,
+        viewCount: Number(video.statistics?.viewCount || 0)
+      }))
+      .filter(video =>
+        video.embeddable &&
+        video.durationSeconds >= 120 &&
+        video.durationSeconds <= 900
+      )
+      .sort((a, b) => b.viewCount - a.viewCount)
+      .slice(0, 5)
+      .map(({ id, title, channelTitle, durationSeconds }) => ({
+        id,
+        title: title.slice(0, 200),
+        channelTitle: channelTitle.slice(0, 100),
+        durationSeconds
+      }));
+
+    done({ ok: true, results });
+	return;
+
+    const suitable = (detailsData.items || [])
+      .filter(video => {
+        const seconds = durationSeconds(video.contentDetails?.duration || "");
+        return (
+          video.status?.embeddable === true &&
+          seconds >= 120 &&
+          seconds <= 900
+        );
+      })
+      .sort(
+        (a, b) =>
+          Number(b.statistics?.viewCount || 0) -
+          Number(a.statistics?.viewCount || 0)
+      );
+
+    if (!suitable.length) {
+      return done({
+        ok: false,
+        error: "No embeddable results between 2 and 15 minutes were found."
+      });
+    }
+
+    const selected = suitable[0];
+    const currentRoom = findRoom(socket);
+
+    if (
+      !currentRoom ||
+      currentRoom.id !== room.id ||
+      !isAdmin(currentRoom, socket.data.userId)
+    ) {
+      return done({ ok: false, error: "You are no longer an admin in this room." });
+    }
+
+    const id = selected.id;
+    currentRoom.queue.push({
+      id,
+      title: selected.snippet.title.slice(0, 200),
+      url: `https://www.youtube.com/watch?v=${id}`
+    });
+
+    save();
+    sendRoom(currentRoom);
+
+    done({
+      ok: true,
+      title: selected.snippet.title,
+      id
+    });
+  } catch {
+    done({ ok: false, error: "Could not reach YouTube. Try again." });
+  }
+});
 });
 
 function leaveSocketRoom(socket) {
