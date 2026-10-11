@@ -580,20 +580,33 @@
         videoId: "",
         playerVars: { playsinline: 1, origin: location.origin },
         events: {
-          onReady: () => {
-            playerReady = true;
-            applyPlayback();
-          },
-          onStateChange: event => {
-            if (
-              !applyingRemote &&
-              event.data === YT.PlayerState.ENDED &&
-              room
-            ) {
-              socket.emit("playback:control", { action: "skip" });
-            }
-          }
-        }
+		  onReady: () => {
+			playerReady = true;
+			applyPlayback();
+		  },
+		  onStateChange: event => {
+			if (
+			  !applyingRemote &&
+			  event.data === YT.PlayerState.ENDED &&
+			  room
+			) {
+			  socket.emit("playback:control", { action: "skip" });
+			}
+		  },
+		  onError: event => {
+			const messages = {
+			  2: "Invalid video ID or player parameter.",
+			  5: "The video could not be played in the HTML5 player.",
+			  100: "Video not found, removed, or private.",
+			  101: "The video owner does not allow embedding.",
+			  150: "The video owner does not allow embedding.",
+			  153: "YouTube could not verify the request's origin or client."
+			};
+
+			console.error("YouTube player error:", event.data);
+			showError(messages[event.data] || `YouTube player error (${event.data}).`);
+		  }
+		}
       });
     };
 
@@ -666,6 +679,34 @@
 
       room.queue.forEach((item, index) => {
         const li = document.createElement("li");
+		const isAdmin =
+		  room.users.find(user => user.id === userId)?.role === "admin";
+
+		if (isAdmin) {
+		  li.draggable = true;
+		  li.style.cursor = "grab";
+
+		  li.addEventListener("dragstart", event => {
+			event.dataTransfer.setData("text/plain", String(index));
+			event.dataTransfer.effectAllowed = "move";
+		  });
+
+		  li.addEventListener("dragover", event => {
+			event.preventDefault();
+			event.dataTransfer.dropEffect = "move";
+		  });
+
+		  li.addEventListener("drop", event => {
+			event.preventDefault();
+
+			const from = Number(event.dataTransfer.getData("text/plain"));
+			const to = index;
+
+			if (Number.isInteger(from) && from !== to) {
+			  socket.emit("queue:reorder", { from, to });
+			}
+		  });
+		}
         li.textContent =
           (index === room.currentIndex ? "▶ " : "") +
           (item.title || `YouTube video (${item.id})`) +

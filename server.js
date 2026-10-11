@@ -341,7 +341,34 @@ io.on("connection", socket => {
     save();
     sendRoom(room);
   });
+	socket.on("queue:reorder", payload => {
+	  const room = findRoom(socket);
+	  if (!room || !isAdmin(room, socket.data.userId) || !payload) return;
 
+	  const from = Number(payload.from);
+	  const to = Number(payload.to);
+
+	  if (
+		!Number.isInteger(from) ||
+		!Number.isInteger(to) ||
+		from < 0 ||
+		to < 0 ||
+		from >= room.queue.length ||
+		to >= room.queue.length ||
+		from === to
+	  ) {
+		return;
+	  }
+
+	  // Keep the currently playing video selected after the move.
+	  const currentItem = room.queue[room.currentIndex];
+	  const [movedItem] = room.queue.splice(from, 1);
+	  room.queue.splice(to, 0, movedItem);
+	  room.currentIndex = room.queue.indexOf(currentItem);
+
+	  save();
+	  sendRoom(room);
+	});
   socket.on("playback:control", payload => {
     const room = findRoom(socket);
     if (!room || !isAdmin(room, socket.data.userId) || !payload) return;
